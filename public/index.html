@@ -55,47 +55,54 @@
     <div class="status" id="status"></div>
   </form>
 
+  <!-- Мост к встроенной веб-форме amoCRM. Скрытую amo-форму он создаёт сам. -->
+  <script src="/amo-bridge.js"></script>
   <script>
-    // Адрес бэкенда. Если фронт и бэк на одном домене — оставьте пустым.
-    const API_URL = '/api/lead';
-
     const form = document.getElementById('lead-form');
     const statusEl = document.getElementById('status');
     const btn = document.getElementById('submit-btn');
+
+    // Простая проверка на стороне лендинга (имя + хотя бы один контакт).
+    function localValidate() {
+      const name = form.name.value.trim();
+      const phone = form.phone.value.trim();
+      const email = form.email.value.trim();
+      if (!name) return 'Укажите имя.';
+      if (!phone && !email) return 'Укажите телефон или email.';
+      return null;
+    }
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       statusEl.textContent = '';
       statusEl.className = 'status';
-      btn.disabled = true;
 
-      const payload = {
-        name: form.name.value,
-        phone: form.phone.value,
-        email: form.email.value,
-        message: form.message.value,
-        source: window.location.href,
-      };
+      const err = localValidate();
+      if (err) {
+        statusEl.textContent = err;
+        statusEl.className = 'status err';
+        return;
+      }
+
+      btn.disabled = true;
+      statusEl.textContent = 'Отправляем…';
 
       try {
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+        // Данные уходят в amoCRM через скрытую amo-форму (её родной amoforms.js).
+        const res = await AmoBridge.submit({
+          name: form.name.value,
+          phone: form.phone.value,
+          email: form.email.value,
+          message: form.message.value,
         });
-        const data = await res.json();
 
-        if (res.ok && data.ok) {
-          statusEl.textContent = 'Спасибо! Заявка отправлена.';
-          statusEl.className = 'status ok';
-          form.reset();
-        } else {
-          const msg = (data.errors && data.errors.join(' ')) || data.error || 'Ошибка отправки.';
-          statusEl.textContent = msg;
-          statusEl.className = 'status err';
-        }
+        statusEl.textContent = res.confirmed
+          ? 'Спасибо! Заявка отправлена.'
+          : 'Заявка принята.';
+        statusEl.className = 'status ok';
+        form.reset();
       } catch (err) {
-        statusEl.textContent = 'Сеть недоступна. Попробуйте ещё раз.';
+        statusEl.textContent = 'Не удалось отправить. Попробуйте ещё раз.';
         statusEl.className = 'status err';
       } finally {
         btn.disabled = false;
