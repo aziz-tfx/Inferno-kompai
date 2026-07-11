@@ -236,8 +236,9 @@
   }
 
   // amoCRM после успешной отправки заменяет форму на «спасибо».
-  // Ждём появления этого признака, чтобы подтвердить доставку.
-  function waitForThanks(container, timeout) {
+  // Ждём этого признака (успех) либо видимых ошибок валидации (провал).
+  // Результат: 'thanks' | 'validation' | 'timeout'.
+  function waitForResult(container, timeout) {
     return new Promise(function (resolve) {
       var started = Date.now();
       (function poll() {
@@ -245,8 +246,18 @@
           '.amoforms__thanks, .amoforms__success, [class*="thank"], [class*="success"]'
         );
         var formGone = !container.querySelector('form input, form textarea');
-        if (thanks || formGone) return resolve(true);
-        if (Date.now() - started > timeout) return resolve(false);
+        if (thanks || formGone) return resolve('thanks');
+
+        // Видимые ошибки валидации amo (обязательное поле не заполнено и т.п.).
+        var errors = container.querySelectorAll(
+          '.amoforms__field-error, [class*="error"]'
+        );
+        var hasVisibleError = Array.prototype.some.call(errors, function (e) {
+          return e.offsetParent !== null && (e.textContent || '').trim();
+        });
+        if (hasVisibleError) return resolve('validation');
+
+        if (Date.now() - started > timeout) return resolve('timeout');
         setTimeout(poll, 200);
       })();
     });
@@ -276,18 +287,26 @@
       injectAmoForm();
       var container = state.containerEl;
       return waitForForm(CONFIG.readyTimeout).then(function (form) {
-        fillForm(form, data || {});
+        var filled = fillForm(form, data || {});
         var submitted = clickSubmit(form);
         if (!submitted) {
           throw new Error('Не удалось нажать кнопку отправки в amo-форме');
         }
-        return waitForThanks(container, CONFIG.submitTimeout).then(function (confirmed) {
-          // Форму нужно переинициализировать для следующей отправки.
-          if (confirmed) {
+        return waitForResult(container, CONFIG.submitTimeout).then(function (verdict) {
+          if (verdict === 'validation') {
+            throw new Error(
+              'amoCRM отклонила заявку (ошибка валидации формы). ' +
+                'Проверьте соответствие полей: AmoBridge.inspect().then(console.table)'
+            );
+          }
+          if (verdict === 'thanks') {
+            // Успех — переинициализируем форму для следующей отправки.
             state.injected = false;
             if (container) container.innerHTML = '';
+            return { ok: true, confirmed: true, filled: filled };
           }
-          return { ok: true, confirmed: confirmed };
+          // timeout — не подтверждено; не выдаём это за успех.
+          return { ok: true, confirmed: false, filled: filled };
         });
       });
     },

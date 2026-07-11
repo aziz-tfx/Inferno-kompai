@@ -96,11 +96,16 @@
           message: form.message.value,
         });
 
-        statusEl.textContent = res.confirmed
-          ? 'Спасибо! Заявка отправлена.'
-          : 'Заявка принята.';
-        statusEl.className = 'status ok';
-        form.reset();
+        if (res.confirmed) {
+          statusEl.textContent = 'Спасибо! Заявка отправлена.';
+          statusEl.className = 'status ok';
+          form.reset();
+        } else {
+          // amoCRM не подтвердила приём — не выдаём за успех.
+          statusEl.textContent = 'Отправлено, но подтверждение не получено. Мы свяжемся с вами.';
+          statusEl.className = 'status ok';
+          console.warn('amo: отправка не подтверждена (confirmed=false).');
+        }
       } catch (err) {
         statusEl.textContent = 'Не удалось отправить. Попробуйте ещё раз.';
         statusEl.className = 'status err';

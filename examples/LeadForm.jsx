@@ -32,11 +32,14 @@ export default function LeadForm() {
     try {
       // window.AmoBridge появляется после загрузки amo-bridge.js.
       const res = await window.AmoBridge.submit({ name, phone, email, message });
-      setStatus({
-        type: 'ok',
-        text: res.confirmed ? 'Спасибо! Заявка отправлена.' : 'Заявка принята.',
-      });
-      f.reset();
+      if (res.confirmed) {
+        setStatus({ type: 'ok', text: 'Спасибо! Заявка отправлена.' });
+        f.reset();
+      } else {
+        // amoCRM не подтвердила приём — не выдаём за успех.
+        setStatus({ type: 'ok', text: 'Отправлено. Мы свяжемся с вами.' });
+        console.warn('amo: отправка не подтверждена (confirmed=false).');
+      }
     } catch (err) {
       setStatus({ type: 'err', text: 'Не удалось отправить. Попробуйте ещё раз.' });
     } finally {
