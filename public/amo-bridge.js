@@ -291,6 +291,56 @@
         });
       });
     },
+
+    /**
+     * Диагностика: показывает, какие поля отдала amo-форма и как мост их
+     * сопоставит. Запускать в консоли браузера на странице с формой:
+     *   AmoBridge.inspect().then(console.table)
+     * @returns {Promise<Array<{index:number, tag:string, type:string, name:string,
+     *   placeholder:string, label:string, matchedAs:string}>>}
+     */
+    inspect: function () {
+      injectAmoForm();
+      return waitForForm(CONFIG.readyTimeout).then(function (form) {
+        var inputs = Array.prototype.slice
+          .call(form.querySelectorAll('input, textarea'))
+          .filter(function (el) {
+            var t = (el.getAttribute('type') || 'text').toLowerCase();
+            return (
+              ['hidden', 'submit', 'button', 'checkbox', 'radio', 'file'].indexOf(t) === -1
+            );
+          });
+
+        return inputs.map(function (el, i) {
+          var hints = fieldText(el);
+          var t = (el.getAttribute('type') || '').toLowerCase();
+          var matchedAs = '(не распознано → фолбэк «имя»)';
+          if (t === 'tel' || match(hints, ['phone', 'tel', 'тел', 'моб', 'номер'])) {
+            matchedAs = 'phone';
+          } else if (t === 'email' || match(hints, ['email', 'mail', 'почт', 'e-mail'])) {
+            matchedAs = 'email';
+          } else if (match(hints, ['name', 'имя', 'фио', 'как вас', 'contact'])) {
+            matchedAs = 'name';
+          } else if (
+            el.tagName === 'TEXTAREA' ||
+            match(hints, ['коммент', 'сообщ', 'message', 'comment', 'вопрос'])
+          ) {
+            matchedAs = 'message';
+          }
+          var field = el.closest('.amoforms__field');
+          var label = field && field.querySelector('.amoforms__field-name, label');
+          return {
+            index: i,
+            tag: el.tagName.toLowerCase(),
+            type: el.getAttribute('type') || '',
+            name: el.getAttribute('name') || '',
+            placeholder: el.getAttribute('placeholder') || '',
+            label: label ? (label.textContent || '').trim() : '',
+            matchedAs: matchedAs,
+          };
+        });
+      });
+    },
   };
 
   global.AmoBridge = api;
